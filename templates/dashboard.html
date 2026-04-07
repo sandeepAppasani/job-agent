@@ -423,6 +423,9 @@
         <a href="/api/download-resumes" class="btn-apply" style="background:var(--accent-secondary);text-decoration:none;display:inline-block;margin-top:0.5rem;text-align:center;" download>
           ⬇ Download All Resumes
         </a>
+        <button onclick="resetAll()" style="margin-top:0.5rem;width:100%;padding:10px;border-radius:8px;border:1px solid #e74c3c;background:transparent;color:#e74c3c;cursor:pointer;font-size:.9rem;font-weight:600;">
+          🗑 Reset All Applications
+        </button>
         <div class="apply-note" id="applyNote">
           Target roles: QA • Data Eng • Azure • Claude AI
         </div>
@@ -590,6 +593,22 @@ function changePage(dir) {
   currentPage += dir;
   renderPage();
   document.getElementById('tableBody').closest('.table-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function resetAll() {
+  if (!confirm('This will permanently delete all application folders and clear the Google Sheet.\n\nAre you sure?')) return;
+  try {
+    const r = await fetch('/api/reset', { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) {
+      showToast('All applications reset successfully', 'success');
+      loadStats();
+    } else {
+      showToast(d.message, 'error');
+    }
+  } catch (e) {
+    showToast('Reset failed: ' + e, 'error');
+  }
 }
 
 function getBadgeClass(status) {

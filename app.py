@@ -218,6 +218,39 @@ def api_update_status():
     return jsonify({"ok": ok, "message": "Updated" if ok else "Not found in sheet"})
 
 
+@app.route("/api/reset", methods=["POST"])
+def api_reset():
+    """Delete all application folders and clear the Google Sheet."""
+    import shutil
+    errors = []
+
+    # 1. Delete applications folder contents
+    if APPLICATIONS_DIR.exists():
+        for item in APPLICATIONS_DIR.iterdir():
+            try:
+                if item.is_dir():
+                    shutil.rmtree(item)
+                else:
+                    item.unlink()
+            except Exception as e:
+                errors.append(f"File delete error: {e}")
+
+    # 2. Clear all rows from Google Sheet (keep header)
+    try:
+        from agents.sheets_tracker import _get_sheet
+        sheet = _get_sheet()
+        if sheet:
+            all_values = sheet.get_all_values()
+            if len(all_values) > 1:
+                sheet.delete_rows(2, len(all_values))
+    except Exception as e:
+        errors.append(f"Sheet clear error: {e}")
+
+    if errors:
+        return jsonify({"ok": False, "message": "; ".join(errors)}), 500
+    return jsonify({"ok": True, "message": "All applications reset successfully"})
+
+
 @app.route("/api/download-resumes")
 def api_download_resumes():
     """Zip all tailored resumes and send as a download."""
