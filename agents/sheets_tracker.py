@@ -4,6 +4,9 @@ Logs all job applications to a centralized Google Sheet.
 Columns: Date Applied, Job Title, Company, Location, Job URL,
          Status, Resume Version, Resume Folder, Job Source, Notes
 """
+import base64
+import json
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -26,18 +29,45 @@ SCOPES = [
 ]
 
 
+def _load_credentials() -> Credentials | None:
+    """
+    Load Google service account credentials.
+    Priority:
+      1. GOOGLE_CREDENTIALS_JSON env var (base64-encoded JSON — for Render/cloud)
+      2. File at GOOGLE_CREDENTIALS_PATH (local dev)
+    """
+    env_val = os.getenv("GOOGLE_CREDENTIALS_JSON", "").strip()
+    if env_val:
+        try:
+            decoded = base64.b64decode(env_val).decode("utf-8")
+            info = json.loads(decoded)
+            return Credentials.from_service_account_info(info, scopes=SCOPES)
+        except Exception as e:
+            logger.error(f"Failed to load credentials from GOOGLE_CREDENTIALS_JSON env var: {e}")
+            return None
+
+    creds_path = Path(GOOGLE_CREDENTIALS_PATH)
+    if creds_path.exists():
+        try:
+            return Credentials.from_service_account_file(str(creds_path), scopes=SCOPES)
+        except Exception as e:
+            logger.error(f"Failed to load credentials from file {creds_path}: {e}")
+            return None
+
+    logger.warning(
+        "Google credentials not found. Set GOOGLE_CREDENTIALS_JSON env var (base64-encoded) "
+        f"or place credentials at {GOOGLE_CREDENTIALS_PATH}. Sheets tracking disabled."
+    )
+    return None
+
+
 def _get_sheet() -> gspread.Worksheet | None:
     """Authenticate and return the first worksheet of the tracker sheet."""
-    creds_path = Path(GOOGLE_CREDENTIALS_PATH)
-    if not creds_path.exists():
-        logger.warning(
-            f"Google credentials not found at {creds_path}. "
-            "Sheets tracking disabled. See README for setup instructions."
-        )
+    creds = _load_credentials()
+    if creds is None:
         return None
 
     try:
-        creds = Credentials.from_service_account_file(str(creds_path), scopes=SCOPES)
         gc = gspread.authorize(creds)
         try:
             spreadsheet = gc.open(GOOGLE_SHEET_NAME)
