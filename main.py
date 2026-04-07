@@ -32,6 +32,7 @@ from agents.job_fetcher import fetch_all_jobs, JobListing
 from agents.resume_tailor import tailor_resume, analyze_job_fit
 from agents.job_applier import apply_to_jobs
 from agents.sheets_tracker import log_application, update_application_status
+from agents.drive_uploader import upload_resume
 from utils.file_utils import (
     read_resume_text,
     create_application_folder,
@@ -137,13 +138,18 @@ def run_pipeline(resume_path: Path):
         resume_version = get_resume_version(app_folder)
         jobs_to_apply.append((job, tailored_resume_path))
 
-        # --- Step 6: Log to Google Sheets (pre-apply) ---
+        # --- Step 6: Upload tailored resume to Google Drive ---
+        drive_link = upload_resume(tailored_resume_path, job.title, job.company)
+        if drive_link:
+            logger.info(f"  Resume on Drive: {drive_link}")
+
+        # --- Step 7: Log to Google Sheets (pre-apply) ---
         log_application(
             job=job,
             status="Tailored" if AUTO_APPLY_ENABLED else "Ready to Apply",
             resume_folder=app_folder,
             resume_version=resume_version,
-            notes=f"Fit score: {score}/100 | {fit.get('recommendation', '')}",
+            notes=f"Fit score: {score}/100 | Drive: {drive_link or 'N/A'}",
         )
 
     # --- Step 7: Batch auto-apply ---
