@@ -1,0 +1,38 @@
+# ── Secrets & Credentials ──────────────────────────────────
+.env
+credentials/google_credentials.json
+credentials/*.json
+
+# ── Personal Data (never commit resume or applications) ────
+Resume/
+applications/
+
+# ── Logs ───────────────────────────────────────────────────
+logs/
+*.log
+
+# ── Python ─────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Playwright ─────────────────────────────────────────────
+.playwright/
+
+# ── OS ─────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDE ────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.suo
+*.user

@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: job-agent
+    runtime: python
+    buildCommand: "pip install -r requirements.txt && playwright install chromium --with-deps"
+    startCommand: "gunicorn app:app --workers 2 --threads 4 --timeout 120 --bind 0.0.0.0:$PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: RAPIDAPI_KEY
+        sync: false
+      - key: LINKEDIN_EMAIL
+        sync: false
+      - key: LINKEDIN_PASSWORD
+        sync: false
+      - key: GOOGLE_SHEET_NAME
+        value: "Job Applications Tracker"
+      - key: JOB_LOCATION
+        value: "United States"
+      - key: JOB_REMOTE
+        value: "true"
+      - key: AUTO_APPLY_ENABLED
+        value: "false"
+      - key: MAX_JOBS_PER_RUN
+        value: "20"

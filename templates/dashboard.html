@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Job Search Agent Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* ── Reset & Variables ───────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:       #0f1117;
+      --surface:  #1a1d27;
+      --surface2: #22263a;
+      --border:   #2e3354;
+      --accent:   #5c6ef8;
+      --accent2:  #7c3aed;
+      --green:    #22c55e;
+      --yellow:   #eab308;
+      --red:      #ef4444;
+      --orange:   #f97316;
+      --text:     #e2e8f0;
+      --muted:    #94a3b8;
+      --radius:   12px;
+    }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Layout ─────────────────────────────────────────── */
+    .navbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 32px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .navbar .brand {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 1.15rem; font-weight: 700; color: var(--text);
+    }
+    .navbar .brand span { font-size: 1.4rem; }
+    .navbar .nav-right { display: flex; align-items: center; gap: 14px; }
+    .status-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--muted); flex-shrink: 0;
+    }
+    .status-dot.running { background: var(--green); animation: pulse 1.2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    .container { max-width: 1380px; margin: 0 auto; padding: 28px 24px; }
+
+    /* ── Stat Cards ──────────────────────────────────────── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 16px; margin-bottom: 28px;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 22px;
+      display: flex; flex-direction: column; gap: 6px;
+      transition: transform .18s, border-color .18s;
+    }
+    .stat-card:hover { transform: translateY(-2px); border-color: var(--accent); }
+    .stat-card .label { font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    .stat-card .value { font-size: 2.2rem; font-weight: 800; line-height: 1; }
+    .stat-card .sub   { font-size: .72rem; color: var(--muted); }
+    .c-total     { --color: var(--accent); }
+    .c-applied   { --color: var(--green); }
+    .c-interview { --color: var(--yellow); }
+    .c-offer     { --color: #a78bfa; }
+    .c-rejected  { --color: var(--red); }
+    .c-pending   { --color: var(--orange); }
+    .stat-card .value { color: var(--color, var(--text)); }
+
+    /* ── Main Grid ───────────────────────────────────────── */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 20px; margin-bottom: 20px;
+    }
+    @media (max-width: 960px) { .main-grid { grid-template-columns: 1fr; } }
+
+    /* ── Panel ───────────────────────────────────────────── */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-title { font-weight: 700; font-size: .95rem; }
+    .panel-body { padding: 20px; }
+
+    /* ── Table ───────────────────────────────────────────── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: .83rem; }
+    thead th {
+      text-align: left; padding: 10px 14px;
+      color: var(--muted); font-weight: 600;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2); white-space: nowrap;
+    }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background .12s; }
+    tbody tr:hover { background: var(--surface2); }
+    tbody td { padding: 10px 14px; vertical-align: middle; }
+    tbody td a { color: var(--accent); text-decoration: none; }
+    tbody td a:hover { text-decoration: underline; }
+    .truncate { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* ── Status Badge ────────────────────────────────────── */
+    .badge {
+      display: inline-block; padding: 2px 10px;
+      border-radius: 999px; font-size: .72rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .05em; cursor: pointer;
+      border: 1px solid transparent;
+    }
+    .badge-applied   { background:#16532d; color:#4ade80; border-color:#166534; }
+    .badge-tailored  { background:#1e3a8a; color:#93c5fd; border-color:#1d4ed8; }
+    .badge-interview { background:#713f12; color:#fcd34d; border-color:#92400e; }
+    .badge-offer     { background:#3b0764; color:#c4b5fd; border-color:#6d28d9; }
+    .badge-rejected  { background:#450a0a; color:#f87171; border-color:#991b1b; }
+    .badge-ghosted   { background:#292524; color:#a8a29e; border-color:#57534e; }
+    .badge-pending   { background:#431407; color:#fb923c; border-color:#9a3412; }
+    .badge-unknown   { background:#1e293b; color:#94a3b8; border-color:#334155; }
+
+    /* ── Right Column ────────────────────────────────────── */
+    .right-col { display: flex; flex-direction: column; gap: 20px; }
+
+    /* ── Apply Button ────────────────────────────────────── */
+    .apply-card {
+      background: linear-gradient(135deg, #1e2455 0%, #2d1f5e 100%);
+      border: 1px solid #3b4698;
+      border-radius: var(--radius);
+      padding: 28px 24px;
+      text-align: center;
+    }
+    .apply-card h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 8px; }
+    .apply-card p { font-size: .8rem; color: var(--muted); margin-bottom: 22px; line-height: 1.6; }
+    .btn-apply {
+      width: 100%; padding: 14px 24px;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+      border: none; border-radius: 10px;
+      color: #fff; font-size: 1rem; font-weight: 700;
+      cursor: pointer; transition: opacity .2s, transform .15s;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+    }
+    .btn-apply:hover:not(:disabled) { opacity: .9; transform: translateY(-1px); }
+    .btn-apply:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+    .btn-apply .spinner {
+      width: 18px; height: 18px;
+      border: 3px solid rgba(255,255,255,.3);
+      border-top-color: #fff;
+      border-radius: 50%; animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .apply-note { margin-top: 12px; font-size: .73rem; color: var(--muted); }
+
+    /* ── Agent Log ───────────────────────────────────────── */
+    .log-box {
+      background: #0a0c14;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      height: 320px; overflow-y: auto;
+      font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+      font-size: .75rem; padding: 14px 16px;
+    }
+    .log-box .log-line {
+      padding: 1px 0; color: #a0aec0; line-height: 1.7;
+      border-bottom: 1px solid transparent;
+    }
+    .log-box .log-line.ok     { color: var(--green); }
+    .log-box .log-line.err    { color: var(--red); }
+    .log-box .log-line.warn   { color: var(--yellow); }
+    .log-box .log-line.info   { color: #67e8f9; }
+    .log-placeholder { color: var(--muted); font-style: italic; text-align: center; margin-top: 40px; }
+
+    /* ── Donut Chart ─────────────────────────────────────── */
+    .chart-wrap { position: relative; height: 200px; }
+
+    /* ── Search & Filter ─────────────────────────────────── */
+    .toolbar {
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    }
+    .search-box {
+      flex: 1; min-width: 180px;
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); border-radius: 8px;
+      padding: 8px 14px; font-size: .85rem; outline: none;
+    }
+    .search-box:focus { border-color: var(--accent); }
+    .filter-select {
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); border-radius: 8px;
+      padding: 8px 12px; font-size: .85rem; cursor: pointer; outline: none;
+    }
+    .filter-select:focus { border-color: var(--accent); }
+    .btn-refresh {
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); border-radius: 8px;
+      padding: 8px 14px; font-size: .82rem; cursor: pointer;
+      display: flex; align-items: center; gap: 6px; transition: border-color .15s;
+    }
+    .btn-refresh:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Edit Status Inline ──────────────────────────────── */
+    .status-select {
+      background: transparent; border: none; color: inherit;
+      font-size: .72rem; font-weight: 700; cursor: pointer;
+      text-transform: uppercase; letter-spacing: .05em;
+    }
+    .status-select:focus { outline: 2px solid var(--accent); border-radius: 4px; }
+
+    /* ── Empty State ─────────────────────────────────────── */
+    .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+    .empty .icon { font-size: 3rem; margin-bottom: 12px; }
+
+    /* ── Toast ───────────────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 28px; right: 28px;
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); padding: 12px 20px; border-radius: 10px;
+      font-size: .85rem; opacity: 0; transform: translateY(10px);
+      transition: opacity .25s, transform .25s; pointer-events: none;
+      z-index: 999;
+    }
+    #toast.show { opacity: 1; transform: translateY(0); }
+    #toast.success { border-color: var(--green); color: var(--green); }
+    #toast.error   { border-color: var(--red);   color: var(--red); }
+
+    /* ── Last Updated ────────────────────────────────────── */
+    .last-update { font-size: .73rem; color: var(--muted); }
+
+    /* scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<!-- ── Navbar ─────────────────────────────────────────────── -->
+<nav class="navbar">
+  <div class="brand">
+    <span>🤖</span> Job Search Agent
+  </div>
+  <div class="nav-right">
+    <div class="status-dot" id="agentDot" title="Agent status"></div>
+    <span id="agentLabel" style="font-size:.82rem;color:var(--muted)">Idle</span>
+    <span class="last-update" id="lastUpdate"></span>
+  </div>
+</nav>
+
+<!-- ── Main ───────────────────────────────────────────────── -->
+<div class="container">
+
+  <!-- ── Stat Cards ── -->
+  <div class="stats-grid">
+    <div class="stat-card c-total">
+      <div class="label">Total Jobs</div>
+      <div class="value" id="st-total">—</div>
+      <div class="sub">tracked applications</div>
+    </div>
+    <div class="stat-card c-applied">
+      <div class="label">Applied</div>
+      <div class="value" id="st-applied">—</div>
+      <div class="sub">submitted</div>
+    </div>
+    <div class="stat-card c-interview">
+      <div class="label">Interviews</div>
+      <div class="value" id="st-interviews">—</div>
+      <div class="sub">scheduled / ongoing</div>
+    </div>
+    <div class="stat-card c-offer">
+      <div class="label">Offers</div>
+      <div class="value" id="st-offers">—</div>
+      <div class="sub">received</div>
+    </div>
+    <div class="stat-card c-rejected">
+      <div class="label">Rejected</div>
+      <div class="value" id="st-rejected">—</div>
+      <div class="sub">or ghosted</div>
+    </div>
+    <div class="stat-card c-pending">
+      <div class="label">Pending</div>
+      <div class="value" id="st-pending">—</div>
+      <div class="sub">awaiting response</div>
+    </div>
+  </div>
+
+  <!-- ── Main Grid ── -->
+  <div class="main-grid">
+
+    <!-- Left: Applications Table -->
+    <div class="panel" style="min-width:0">
+      <div class="panel-header">
+        <span class="panel-title">📋 Applications</span>
+        <div class="toolbar">
+          <input class="search-box" id="searchInput" type="text" placeholder="Search jobs…" />
+          <select class="filter-select" id="statusFilter">
+            <option value="">All Statuses</option>
+            <option value="Applied">Applied</option>
+            <option value="Tailored">Tailored</option>
+            <option value="Interview Scheduled">Interview</option>
+            <option value="Offer">Offer</option>
+            <option value="Rejected">Rejected</option>
+            <option value="Ghosted">Ghosted</option>
+            <option value="Pending Manual Apply">Pending</option>
+          </select>
+          <button class="btn-refresh" id="btnRefresh" onclick="loadData()">
+            <span id="refreshIcon">↻</span> Refresh
+          </button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="jobTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Date Applied</th>
+              <th>Job Title</th>
+              <th>Company</th>
+              <th>Location</th>
+              <th>Status</th>
+              <th>Job Link</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            <tr><td colspan="7"><div class="empty"><div class="icon">⏳</div>Loading…</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Right Column -->
+    <div class="right-col">
+
+      <!-- Apply Button Card -->
+      <div class="apply-card">
+        <h3>🚀 Run Job Search Agent</h3>
+        <p>Fetches fresh listings, tailors your resume with Claude AI, and applies to LinkedIn jobs automatically.</p>
+        <button class="btn-apply" id="btnApply" onclick="runAgent()">
+          <span id="btnApplyIcon">⚡</span>
+          <span id="btnApplyText">Apply Jobs Now</span>
+        </button>
+        <div class="apply-note" id="applyNote">
+          Target roles: QA • Data Eng • Azure • Claude AI
+        </div>
+      </div>
+
+      <!-- Status Chart -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">📊 Status Breakdown</span>
+        </div>
+        <div class="panel-body">
+          <div class="chart-wrap">
+            <canvas id="statusChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Agent Log -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">🖥️ Agent Log</span>
+          <button class="btn-refresh" onclick="clearLog()">Clear</button>
+        </div>
+        <div class="log-box" id="logBox">
+          <div class="log-placeholder">Agent output will appear here when running…</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ── State ────────────────────────────────────────────────────
+let allRows    = [];
+let chartInst  = null;
+let agentSSE   = null;
+let isRunning  = false;
+
+const STATUS_CLASSES = {
+  applied:   'badge-applied',
+  tailored:  'badge-tailored',
+  interview: 'badge-interview',
+  offer:     'badge-offer',
+  rejected:  'badge-rejected',
+  ghosted:   'badge-ghosted',
+  pending:   'badge-pending',
+};
+const STATUS_OPTIONS = [
+  'Tailored','Pending Manual Apply','Applied',
+  'Interview Scheduled','Offer','Rejected','Ghosted','Withdrawn',
+];
+const CHART_COLORS = ['#5c6ef8','#22c55e','#eab308','#a78bfa','#ef4444','#f97316','#94a3b8'];
+
+// ── Fetch & Render ───────────────────────────────────────────
+async function loadData() {
+  document.getElementById('refreshIcon').style.animation = 'spin .5s linear infinite';
+  try {
+    const r = await fetch('/api/stats');
+    const d = await r.json();
+
+    // Stats
+    document.getElementById('st-total').textContent     = d.total;
+    document.getElementById('st-applied').textContent   = d.applied;
+    document.getElementById('st-interviews').textContent = d.interviews;
+    document.getElementById('st-offers').textContent    = d.offers;
+    document.getElementById('st-rejected').textContent  = d.rejected;
+    document.getElementById('st-pending').textContent   = d.pending;
+
+    // Agent state
+    setAgentState(d.agent_running);
+
+    // Table
+    allRows = d.applications || [];
+    renderTable(allRows);
+
+    // Chart
+    renderChart(d.status_counts || {});
+
+    // Last update
+    document.getElementById('lastUpdate').textContent =
+      'Updated ' + new Date().toLocaleTimeString();
+  } catch (e) {
+    showToast('Failed to load data — is Flask running?', 'error');
+  } finally {
+    document.getElementById('refreshIcon').style.animation = '';
+  }
+}
+
+// ── Table Render ─────────────────────────────────────────────
+function renderTable(rows) {
+  const search  = document.getElementById('searchInput').value.toLowerCase();
+  const filter  = document.getElementById('statusFilter').value.toLowerCase();
+  const filtered = rows.filter(r => {
+    const text = `${r['Job Title']} ${r['Company']} ${r['Location']}`.toLowerCase();
+    const statusOk = !filter || (r['Status'] || '').toLowerCase().includes(filter);
+    return text.includes(search) && statusOk;
+  });
+
+  const tbody = document.getElementById('tableBody');
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="icon">🔍</div>No matching applications.</div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map((r, i) => {
+    const status    = r['Status'] || 'Unknown';
+    const badgeCls  = getBadgeClass(status);
+    const url       = r['Job URL'] || '#';
+    const shortUrl  = url.length > 40 ? url.slice(0,40)+'…' : url;
+    return `<tr>
+      <td style="color:var(--muted)">${i+1}</td>
+      <td style="white-space:nowrap">${r['Date Applied'] || '—'}</td>
+      <td class="truncate" title="${esc(r['Job Title'])}">${esc(r['Job Title'] || '—')}</td>
+      <td class="truncate" title="${esc(r['Company'])}">${esc(r['Company'] || '—')}</td>
+      <td class="truncate" title="${esc(r['Location'])}">${esc(r['Location'] || '—')}</td>
+      <td>
+        <span class="badge ${badgeCls}" onclick="openStatusMenu(this, '${esc(url)}')"
+              title="Click to change status">
+          ${esc(status)}
+        </span>
+      </td>
+      <td>
+        ${url !== '#'
+          ? `<a href="${esc(url)}" target="_blank" rel="noopener" title="${esc(url)}">${shortUrl}</a>`
+          : '—'}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function getBadgeClass(status) {
+  const s = status.toLowerCase();
+  if (s.includes('applied'))   return 'badge-applied';
+  if (s.includes('tailor'))    return 'badge-tailored';
+  if (s.includes('interview')) return 'badge-interview';
+  if (s.includes('offer'))     return 'badge-offer';
+  if (s.includes('reject'))    return 'badge-rejected';
+  if (s.includes('ghost') || s.includes('withdrawn')) return 'badge-ghosted';
+  if (s.includes('pend') || s.includes('manual')) return 'badge-pending';
+  return 'badge-unknown';
+}
+
+// ── Inline Status Update ─────────────────────────────────────
+function openStatusMenu(badge, url) {
+  // Build a small inline select
+  const current = badge.textContent.trim();
+  const sel = document.createElement('select');
+  sel.className = 'status-select';
+  STATUS_OPTIONS.forEach(opt => {
+    const o = document.createElement('option');
+    o.value = opt; o.textContent = opt;
+    if (opt.toLowerCase() === current.toLowerCase()) o.selected = true;
+    sel.appendChild(o);
+  });
+  badge.replaceWith(sel);
+  sel.focus();
+
+  sel.onchange = async () => {
+    const newStatus = sel.value;
+    try {
+      const r = await fetch('/api/update-status', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ url, status: newStatus }),
+      });
+      const d = await r.json();
+      showToast(d.ok ? `Status → ${newStatus}` : d.message, d.ok ? 'success' : 'error');
+    } catch { showToast('Update failed', 'error'); }
+    await loadData();
+  };
+  sel.onblur = () => loadData();
+}
+
+// ── Chart ────────────────────────────────────────────────────
+function renderChart(counts) {
+  const labels = Object.keys(counts);
+  const values = Object.values(counts);
+  if (!labels.length) return;
+
+  const ctx = document.getElementById('statusChart').getContext('2d');
+  if (chartInst) chartInst.destroy();
+  chartInst = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: CHART_COLORS,
+        borderColor: '#1a1d27',
+        borderWidth: 3,
+        hoverOffset: 6,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            color: '#94a3b8', boxWidth: 12, padding: 10, font: { size: 11 }
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.label}: ${ctx.raw}`
+          }
+        }
+      },
+      cutout: '68%',
+    }
+  });
+}
+
+// ── Run Agent ────────────────────────────────────────────────
+async function runAgent() {
+  if (isRunning) return;
+  const log = document.getElementById('logBox');
+  log.innerHTML = '';
+  appendLog('▶ Sending start command…', 'info');
+
+  try {
+    const r = await fetch('/api/run-agent', { method: 'POST' });
+    const d = await r.json();
+    if (!d.ok) { showToast(d.message, 'error'); return; }
+  } catch (e) {
+    showToast('Could not reach server', 'error'); return;
+  }
+
+  setAgentState(true);
+  startSSE();
+}
+
+function startSSE() {
+  if (agentSSE) agentSSE.close();
+  agentSSE = new EventSource('/api/agent-status');
+
+  agentSSE.onmessage = e => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'log') {
+      const line = msg.text;
+      const cls = line.includes('✅') ? 'ok'
+                : line.includes('❌') ? 'err'
+                : line.includes('WARNING') ? 'warn'
+                : line.includes('INFO') ? 'info' : '';
+      appendLog(line, cls);
+    } else if (msg.type === 'done') {
+      agentSSE.close();
+      setAgentState(false);
+      showToast('Agent completed!', 'success');
+      setTimeout(loadData, 1500);
+    }
+  };
+  agentSSE.onerror = () => {
+    agentSSE.close();
+    setAgentState(false);
+  };
+}
+
+function appendLog(text, cls = '') {
+  const log = document.getElementById('logBox');
+  // Remove placeholder
+  const ph = log.querySelector('.log-placeholder');
+  if (ph) ph.remove();
+
+  const div = document.createElement('div');
+  div.className = 'log-line' + (cls ? ' ' + cls : '');
+  div.textContent = text;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+function clearLog() {
+  document.getElementById('logBox').innerHTML =
+    '<div class="log-placeholder">Agent output will appear here when running…</div>';
+}
+
+// ── Agent State UI ───────────────────────────────────────────
+function setAgentState(running) {
+  isRunning = running;
+  const dot   = document.getElementById('agentDot');
+  const label = document.getElementById('agentLabel');
+  const btn   = document.getElementById('btnApply');
+  const icon  = document.getElementById('btnApplyIcon');
+  const txt   = document.getElementById('btnApplyText');
+  const note  = document.getElementById('applyNote');
+
+  if (running) {
+    dot.classList.add('running');
+    label.textContent = 'Running…';
+    btn.disabled = true;
+    icon.outerHTML = '<span class="spinner" id="btnApplyIcon"></span>';
+    txt.textContent = 'Agent Running…';
+    note.textContent = 'Fetching jobs and tailoring resumes…';
+  } else {
+    dot.classList.remove('running');
+    label.textContent = 'Idle';
+    btn.disabled = false;
+    document.getElementById('btnApplyIcon').outerHTML = '<span id="btnApplyIcon">⚡</span>';
+    txt.textContent = 'Apply Jobs Now';
+    note.textContent = 'Target roles: QA • Data Eng • Azure • Claude AI';
+  }
+}
+
+// ── Helpers ──────────────────────────────────────────────────
+function esc(str) {
+  return String(str || '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show ' + (type === 'success' ? 'success' : type === 'error' ? 'error' : '');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.className = ''; }, 3000);
+}
+
+// ── Search / Filter ──────────────────────────────────────────
+document.getElementById('searchInput').addEventListener('input', () => renderTable(allRows));
+document.getElementById('statusFilter').addEventListener('change', () => renderTable(allRows));
+
+// ── Auto-refresh every 60s ───────────────────────────────────
+loadData();
+setInterval(loadData, 60000);
+</script>
+</body>
+</html>
