@@ -23,8 +23,6 @@ SCOPES = [
 
 DRIVE_FOLDER_NAME = "Job Applications - Auto"
 
-_drive_folder_id: str | None = None
-
 
 def _load_credentials() -> Credentials | None:
     env_val = os.getenv("GOOGLE_CREDENTIALS_JSON", "").strip()
@@ -49,32 +47,16 @@ def _load_credentials() -> Credentials | None:
     return None
 
 
-def _get_or_create_folder(service, folder_name: str) -> str | None:
-    """Return the Drive folder ID, creating it if it doesn't exist."""
-    query = (
-        f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' "
-        f"and trashed=false"
-    )
-    results = service.files().list(q=query, fields="files(id, name)").execute()
-    files = results.get("files", [])
-    if files:
-        return files[0]["id"]
-
-    folder_meta = {
-        "name": folder_name,
-        "mimeType": "application/vnd.google-apps.folder",
-    }
-    folder = service.files().create(body=folder_meta, fields="id").execute()
-    logger.info(f"Drive: created folder '{folder_name}'")
-    return folder.get("id")
-
-
 def upload_resume(file_path: Path, job_title: str, company: str) -> str | None:
     """
     Upload a resume file to Google Drive.
+    Uses GOOGLE_DRIVE_FOLDER_ID env var as the target folder.
     Returns the shareable Drive URL or None on failure.
     """
-    global _drive_folder_id
+    folder_id = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "").strip()
+    if not folder_id:
+        logger.warning("Drive: GOOGLE_DRIVE_FOLDER_ID not set — upload skipped.")
+        return None
 
     creds = _load_credentials()
     if creds is None:
@@ -87,18 +69,11 @@ def upload_resume(file_path: Path, job_title: str, company: str) -> str | None:
     try:
         service = build("drive", "v3", credentials=creds)
 
-        if _drive_folder_id is None:
-            _drive_folder_id = _get_or_create_folder(service, DRIVE_FOLDER_NAME)
-
-        # Name the file clearly
         safe_title = job_title.replace("/", "-")[:40]
         safe_company = company.replace("/", "-")[:20]
         drive_filename = f"{safe_title} @ {safe_company} - tailored_resume{file_path.suffix}"
 
-        file_meta = {
-            "name": drive_filename,
-            "parents": [_drive_folder_id] if _drive_folder_id else [],
-        }
+        file_meta = {"name": drive_filename, "parents": [folder_id]}
         media = MediaFileUpload(str(file_path), resumable=False)
         uploaded = service.files().create(
             body=file_meta,
