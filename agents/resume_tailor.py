@@ -1,17 +1,17 @@
 """
 Resume Tailor Agent
-Uses Claude claude-opus-4-6 with adaptive thinking to tailor the resume
-for each specific job description.
+Uses Google Gemini (free) to tailor the resume for each specific job description.
+Falls back gracefully if GEMINI_API_KEY is not set.
 """
-import anthropic
+import json
 
-from config import ANTHROPIC_API_KEY, CLAUDE_MODEL
+import google.generativeai as genai
+
+from config import GEMINI_API_KEY, GEMINI_MODEL
 from agents.job_fetcher import JobListing
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
 TAILOR_SYSTEM_PROMPT = """You are an expert resume writer and career coach specializing in
 technology roles. Your task is to tailor a candidate's resume to match a specific job description
@@ -28,13 +28,25 @@ Guidelines:
 - Ensure ATS (Applicant Tracking System) optimization with relevant keywords"""
 
 
+def _get_client():
+    if not GEMINI_API_KEY:
+        return None
+    genai.configure(api_key=GEMINI_API_KEY)
+    return genai.GenerativeModel(
+        model_name=GEMINI_MODEL,
+        system_instruction=TAILOR_SYSTEM_PROMPT,
+    )
+
+
 def tailor_resume(resume_text: str, job: JobListing) -> str:
     """
-    Use Claude to tailor the resume text for a specific job listing.
+    Use Gemini to tailor the resume text for a specific job listing.
     Returns the tailored resume as plain text.
+    Falls back to original resume if API is unavailable.
     """
-    if not ANTHROPIC_API_KEY or ANTHROPIC_API_KEY == "your_anthropic_api_key_here":
-        logger.error("ANTHROPIC_API_KEY not configured.")
+    client = _get_client()
+    if client is None:
+        logger.warning("GEMINI_API_KEY not set — using original resume.")
         return resume_text
 
     prompt = f"""Please tailor the following resume for this specific job posting.
@@ -61,36 +73,24 @@ def tailor_resume(resume_text: str, job: JobListing) -> str:
 Provide the complete tailored resume:"""
 
     try:
-        with client.messages.stream(
-            model=CLAUDE_MODEL,
-            max_tokens=4096,
-            thinking={"type": "adaptive"},
-            system=TAILOR_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": prompt}],
-        ) as stream:
-            tailored = stream.get_final_message()
-
-        result_text = ""
-        for block in tailored.content:
-            if block.type == "text":
-                result_text = block.text
-                break
-
+        response = client.generate_content(prompt)
+        result_text = response.text.strip()
         logger.info(f"Resume tailored for: {job.title} @ {job.company}")
         return result_text
-
-    except anthropic.APIError as e:
-        logger.error(f"Claude API error while tailoring resume: {e}")
+    except Exception as e:
+        logger.error(f"Gemini API error while tailoring resume: {e}")
         return resume_text
 
 
 def analyze_job_fit(resume_text: str, job: JobListing) -> dict:
     """
-    Ask Claude to score how well the resume matches the job (0-100)
-    and return key missing skills/keywords.
+    Use Gemini to score how well the resume matches the job (0-100).
+    Returns a dict with score, matching/missing skills, recommendation.
     """
-    if not ANTHROPIC_API_KEY or ANTHROPIC_API_KEY == "your_anthropic_api_key_here":
-        return {"score": 50, "missing_skills": [], "matching_skills": [], "recommendation": "API key not set"}
+    client = _get_client()
+    if client is None:
+        return {"score": 50, "missing_skills": [], "matching_skills": [],
+                "recommendation": "API key not set", "should_apply": True}
 
     prompt = f"""Analyze how well this resume matches the job description.
 
@@ -100,24 +100,18 @@ def analyze_job_fit(resume_text: str, job: JobListing) -> dict:
 ## RESUME
 {resume_text[:2000]}
 
-Respond in this exact JSON format:
+Respond in this exact JSON format only, no extra text:
 {{
   "match_score": <0-100>,
   "matching_skills": ["skill1", "skill2"],
   "missing_skills": ["skill1", "skill2"],
   "recommendation": "brief recommendation",
-  "should_apply": true/false
+  "should_apply": true
 }}"""
 
     try:
-        response = client.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=512,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        import json
-        text = next((b.text for b in response.content if b.type == "text"), "{}")
-        # Extract JSON from response
+        response = client.generate_content(prompt)
+        text = response.text.strip()
         start = text.find("{")
         end = text.rfind("}") + 1
         if start >= 0 and end > start:
@@ -125,4 +119,5 @@ Respond in this exact JSON format:
     except Exception as e:
         logger.error(f"Job fit analysis error: {e}")
 
-    return {"score": 50, "missing_skills": [], "matching_skills": [], "recommendation": "Analysis failed", "should_apply": True}
+    return {"score": 50, "missing_skills": [], "matching_skills": [],
+            "recommendation": "Analysis failed", "should_apply": True}

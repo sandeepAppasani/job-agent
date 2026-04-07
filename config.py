@@ -20,6 +20,7 @@ RESUME_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── API Keys ─────────────────────────────────────────────────
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+GEMINI_API_KEY    = os.getenv("GEMINI_API_KEY", "")
 RAPIDAPI_KEY      = os.getenv("RAPIDAPI_KEY", "")
 
 # ── LinkedIn ─────────────────────────────────────────────────
@@ -59,7 +60,8 @@ JOB_LOCATION = os.getenv("JOB_LOCATION", "United States")
 JOB_REMOTE   = os.getenv("JOB_REMOTE", "true").lower() == "true"
 
 # ── Claude Model ──────────────────────────────────────────────
-CLAUDE_MODEL = "claude-opus-4-6"
+CLAUDE_MODEL  = "claude-opus-4-6"
+GEMINI_MODEL  = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
 # ── Application Settings ──────────────────────────────────────
 AUTO_APPLY_ENABLED = os.getenv("AUTO_APPLY_ENABLED", "false").lower() == "true"

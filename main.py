@@ -26,6 +26,7 @@ from config import (
     APPLICATIONS_DIR,
     AUTO_APPLY_ENABLED,
     ANTHROPIC_API_KEY,
+    GEMINI_API_KEY,
 )
 from agents.resume_monitor import ResumeMonitor
 from agents.job_fetcher import fetch_all_jobs, JobListing
@@ -47,8 +48,8 @@ logger = get_logger("main")
 def validate_config():
     """Warn about missing critical configuration."""
     issues = []
-    if not ANTHROPIC_API_KEY or ANTHROPIC_API_KEY == "your_anthropic_api_key_here":
-        issues.append("ANTHROPIC_API_KEY not set — resume tailoring will be skipped")
+    if not GEMINI_API_KEY and not ANTHROPIC_API_KEY:
+        issues.append("Neither GEMINI_API_KEY nor ANTHROPIC_API_KEY set — resume tailoring will be skipped")
     if not RESUME_PATH.exists():
         issues.append(f"Resume not found at {RESUME_PATH}")
 
