@@ -138,6 +138,47 @@
     /* ── Right Column ────────────────────────────────────── */
     .right-col { display: flex; flex-direction: column; gap: 20px; }
 
+    /* ── Resume Upload Card ──────────────────────────────── */
+    .upload-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 22px;
+    }
+    .upload-card.ok   { border-color: #166534; background: #052e16; }
+    .upload-card.warn { border-color: #92400e; background: #1c1008; }
+    .upload-header { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+    .upload-header h3 { font-size:.9rem; font-weight:700; }
+    .resume-status {
+      font-size:.78rem; padding:3px 10px; border-radius:999px; font-weight:600;
+    }
+    .resume-status.ready    { background:#14532d; color:#4ade80; }
+    .resume-status.missing  { background:#450a0a; color:#f87171; }
+    .upload-zone {
+      border: 2px dashed var(--border); border-radius: 10px;
+      padding: 18px; text-align: center; cursor: pointer;
+      transition: border-color .2s, background .2s;
+      position: relative;
+    }
+    .upload-zone:hover { border-color: var(--accent); background: rgba(92,110,248,.05); }
+    .upload-zone.dragging { border-color: var(--green); background: rgba(34,197,94,.07); }
+    .upload-zone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%;
+    }
+    .upload-icon { font-size: 1.8rem; margin-bottom: 6px; }
+    .upload-hint { font-size: .75rem; color: var(--muted); }
+    .upload-filename { font-size: .8rem; color: var(--green); margin-top: 6px; font-weight:600; }
+    .btn-upload {
+      width: 100%; margin-top: 12px; padding: 10px;
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); border-radius: 8px;
+      font-size: .85rem; font-weight: 600; cursor: pointer;
+      transition: border-color .15s, background .15s;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-upload:hover:not(:disabled) { border-color: var(--accent); background: rgba(92,110,248,.1); }
+    .btn-upload:disabled { opacity:.5; cursor:not-allowed; }
+
     /* ── Apply Button ────────────────────────────────────── */
     .apply-card {
       background: linear-gradient(135deg, #1e2455 0%, #2d1f5e 100%);
@@ -346,6 +387,24 @@
     <!-- Right Column -->
     <div class="right-col">
 
+      <!-- Resume Upload Card -->
+      <div class="upload-card" id="uploadCard">
+        <div class="upload-header">
+          <h3>📄 Resume</h3>
+          <span class="resume-status missing" id="resumeStatusBadge">Not uploaded</span>
+        </div>
+        <div class="upload-zone" id="uploadZone">
+          <input type="file" id="resumeFileInput" accept=".docx,.pdf" />
+          <div class="upload-icon">📁</div>
+          <div class="upload-hint">Drag & drop or click to upload<br><strong>.docx</strong> or <strong>.pdf</strong></div>
+          <div class="upload-filename" id="uploadFilename"></div>
+        </div>
+        <button class="btn-upload" id="btnUpload" onclick="uploadResume()" disabled>
+          <span id="uploadBtnIcon">⬆</span>
+          <span id="uploadBtnText">Upload Resume</span>
+        </button>
+      </div>
+
       <!-- Apply Button Card -->
       <div class="apply-card">
         <h3>🚀 Run Job Search Agent</h3>
@@ -428,6 +487,11 @@ async function loadData() {
 
     // Agent state
     setAgentState(d.agent_running);
+
+    // Resume badge
+    if (d.resume_ready !== undefined) {
+      updateResumeBadge(d.resume_ready, d.resume_ready ? 'Uploaded' : null);
+    }
 
     // Table
     allRows = d.applications || [];
@@ -677,11 +741,98 @@ function showToast(msg, type = '') {
   t._timer = setTimeout(() => { t.className = ''; }, 3000);
 }
 
+// ── Resume Upload ─────────────────────────────────────────────
+let selectedFile = null;
+
+async function checkResumeStatus() {
+  try {
+    const r = await fetch('/api/resume-status');
+    const d = await r.json();
+    updateResumeBadge(d.uploaded, d.filename);
+  } catch { /* ignore */ }
+}
+
+function updateResumeBadge(uploaded, filename) {
+  const badge = document.getElementById('resumeStatusBadge');
+  const card  = document.getElementById('uploadCard');
+  if (uploaded) {
+    badge.textContent = `✓ ${filename}`;
+    badge.className = 'resume-status ready';
+    card.classList.add('ok'); card.classList.remove('warn');
+  } else {
+    badge.textContent = 'Not uploaded';
+    badge.className = 'resume-status missing';
+    card.classList.add('warn'); card.classList.remove('ok');
+  }
+}
+
+// File input change
+document.getElementById('resumeFileInput').addEventListener('change', function() {
+  if (this.files[0]) {
+    selectedFile = this.files[0];
+    document.getElementById('uploadFilename').textContent = selectedFile.name;
+    document.getElementById('btnUpload').disabled = false;
+  }
+});
+
+// Drag & drop
+const zone = document.getElementById('uploadZone');
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragging'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('dragging'));
+zone.addEventListener('drop', e => {
+  e.preventDefault(); zone.classList.remove('dragging');
+  const file = e.dataTransfer.files[0];
+  if (file && (file.name.endsWith('.docx') || file.name.endsWith('.pdf'))) {
+    selectedFile = file;
+    document.getElementById('uploadFilename').textContent = file.name;
+    document.getElementById('btnUpload').disabled = false;
+  } else {
+    showToast('Only .docx and .pdf files allowed', 'error');
+  }
+});
+
+async function uploadResume() {
+  if (!selectedFile) return;
+  const btn  = document.getElementById('btnUpload');
+  const icon = document.getElementById('uploadBtnIcon');
+  const txt  = document.getElementById('uploadBtnText');
+
+  btn.disabled = true;
+  icon.outerHTML = '<span class="spinner" style="width:14px;height:14px;border-width:2px" id="uploadBtnIcon"></span>';
+  txt.textContent = 'Uploading…';
+
+  const form = new FormData();
+  form.append('file', selectedFile);
+
+  try {
+    const r = await fetch('/api/upload-resume', { method: 'POST', body: form });
+    const d = await r.json();
+    if (d.ok) {
+      showToast(d.message, 'success');
+      updateResumeBadge(true, d.filename);
+      selectedFile = null;
+      document.getElementById('uploadFilename').textContent = '';
+    } else {
+      showToast(d.message, 'error');
+    }
+  } catch (e) {
+    showToast('Upload failed — ' + e.message, 'error');
+  } finally {
+    document.getElementById('uploadBtnIcon').outerHTML = '<span id="uploadBtnIcon">⬆</span>';
+    txt.textContent = 'Upload Resume';
+    btn.disabled = !selectedFile;
+  }
+}
+
+// Also reflect resume_ready in stats response
+const _origLoadData = loadData;
+
 // ── Search / Filter ──────────────────────────────────────────
 document.getElementById('searchInput').addEventListener('input', () => renderTable(allRows));
 document.getElementById('statusFilter').addEventListener('change', () => renderTable(allRows));
 
 // ── Auto-refresh every 60s ───────────────────────────────────
+checkResumeStatus();
 loadData();
 setInterval(loadData, 60000);
 </script>
