@@ -382,6 +382,13 @@
           </tbody>
         </table>
       </div>
+      <div id="pagination" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:1px solid var(--border);font-size:.83rem;">
+        <span id="pageInfo" style="color:var(--muted)"></span>
+        <div style="display:flex;gap:8px;">
+          <button id="btnPrev" onclick="changePage(-1)" style="padding:5px 14px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;">← Prev</button>
+          <button id="btnNext" onclick="changePage(1)"  style="padding:5px 14px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;">Next →</button>
+        </div>
+      </div>
     </div>
 
     <!-- Right Column -->
@@ -513,29 +520,48 @@ async function loadData() {
   }
 }
 
-// ── Table Render ─────────────────────────────────────────────
+// ── Table Render with Pagination ─────────────────────────────
+const PAGE_SIZE = 20;
+let currentPage = 1;
+let filteredRows = [];
+
 function renderTable(rows) {
-  const search  = document.getElementById('searchInput').value.toLowerCase();
-  const filter  = document.getElementById('statusFilter').value.toLowerCase();
-  const filtered = rows.filter(r => {
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  const filter = document.getElementById('statusFilter').value.toLowerCase();
+  filteredRows = rows.filter(r => {
     const text = `${r['Job Title']} ${r['Company']} ${r['Location']}`.toLowerCase();
     const statusOk = !filter || (r['Status'] || '').toLowerCase().includes(filter);
     return text.includes(search) && statusOk;
   });
+  currentPage = 1;
+  renderPage();
+}
 
+function renderPage() {
   const tbody = document.getElementById('tableBody');
-  if (!filtered.length) {
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  currentPage = Math.min(currentPage, totalPages);
+
+  if (!filteredRows.length) {
     tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="icon">🔍</div>No matching applications.</div></td></tr>`;
+    document.getElementById('pageInfo').textContent = '';
+    document.getElementById('btnPrev').disabled = true;
+    document.getElementById('btnNext').disabled = true;
     return;
   }
 
-  tbody.innerHTML = filtered.map((r, i) => {
-    const status    = r['Status'] || 'Unknown';
-    const badgeCls  = getBadgeClass(status);
-    const url       = r['Job URL'] || '#';
-    const shortUrl  = url.length > 40 ? url.slice(0,40)+'…' : url;
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const end   = Math.min(start + PAGE_SIZE, filteredRows.length);
+  const page  = filteredRows.slice(start, end);
+
+  tbody.innerHTML = page.map((r, i) => {
+    const status   = r['Status'] || 'Unknown';
+    const badgeCls = getBadgeClass(status);
+    const url      = r['Job URL'] || '#';
+    const shortUrl = url.length > 40 ? url.slice(0,40)+'…' : url;
+    const rowNum   = start + i + 1;
     return `<tr>
-      <td style="color:var(--muted)">${i+1}</td>
+      <td style="color:var(--muted)">${rowNum}</td>
       <td style="white-space:nowrap">${r['Date Applied'] || '—'}</td>
       <td class="truncate" title="${esc(r['Job Title'])}">${esc(r['Job Title'] || '—')}</td>
       <td class="truncate" title="${esc(r['Company'])}">${esc(r['Company'] || '—')}</td>
@@ -553,6 +579,17 @@ function renderTable(rows) {
       </td>
     </tr>`;
   }).join('');
+
+  document.getElementById('pageInfo').textContent =
+    `Showing ${start+1}–${end} of ${filteredRows.length} jobs  (Page ${currentPage} / ${totalPages})`;
+  document.getElementById('btnPrev').disabled = currentPage <= 1;
+  document.getElementById('btnNext').disabled = currentPage >= totalPages;
+}
+
+function changePage(dir) {
+  currentPage += dir;
+  renderPage();
+  document.getElementById('tableBody').closest('.table-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function getBadgeClass(status) {
