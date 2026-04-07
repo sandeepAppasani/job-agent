@@ -9,6 +9,7 @@ Sources (in priority order):
 """
 import time
 import random
+from datetime import datetime
 from dataclasses import dataclass, field
 
 import requests
@@ -54,12 +55,25 @@ class JobListing:
 
 
 # ── Source 1: LinkedIn public guest search ────────────────────
+def _linkedin_tpr() -> str:
+    """Convert JOB_DATE_FROM to LinkedIn's f_TPR seconds-ago parameter."""
+    if not JOB_DATE_FROM:
+        return ""
+    try:
+        cutoff  = datetime.strptime(JOB_DATE_FROM, "%Y-%m-%d")
+        seconds = int((datetime.utcnow() - cutoff).total_seconds())
+        return f"r{max(seconds, 3600)}"  # minimum 1 hour
+    except Exception:
+        return ""
+
+
 def fetch_linkedin_jobs(query: str) -> list[JobListing]:
     url = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search"
     params = {
         "keywords": query,
         "location": JOB_LOCATION,
         "f_WT":     "2" if JOB_REMOTE else "",
+        "f_TPR":    _linkedin_tpr(),
         "start":    "0",
         "count":    "10",
     }
@@ -304,12 +318,10 @@ def _after_date_from(posted_at: str) -> bool:
     if not JOB_DATE_FROM or not posted_at:
         return True
     try:
-        from datetime import datetime as dt
-        cutoff = dt.strptime(JOB_DATE_FROM, "%Y-%m-%d")
-        # Try common date formats
+        cutoff = datetime.strptime(JOB_DATE_FROM, "%Y-%m-%d")
         for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
             try:
-                posted = dt.strptime(posted_at[:19], fmt[:len(posted_at[:19])])
+                posted = datetime.strptime(posted_at[:len(fmt)], fmt)
                 return posted >= cutoff
             except ValueError:
                 continue
