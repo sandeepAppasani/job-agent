@@ -8,16 +8,18 @@ Job Search Agent — Dashboard Web Server
   GET  /api/agent-status     → SSE stream of agent log lines
   POST /api/update-status    → update a row's status in Sheets
 """
+import io
 import json
 import os
 import queue
 import subprocess
 import sys
 import threading
+import zipfile
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request, Response, stream_with_context
+from flask import Flask, jsonify, render_template, request, Response, send_file, stream_with_context
 from flask_cors import CORS
 
 from config import APPLICATIONS_DIR, GOOGLE_SHEET_NAME, RESUME_DIR, RESUME_PATH
@@ -214,6 +216,33 @@ def api_update_status():
         return jsonify({"ok": False, "message": "url and status required"}), 400
     ok = update_application_status(url, new_status)
     return jsonify({"ok": ok, "message": "Updated" if ok else "Not found in sheet"})
+
+
+@app.route("/api/download-resumes")
+def api_download_resumes():
+    """Zip all tailored resumes and send as a download."""
+    if not APPLICATIONS_DIR.exists():
+        return jsonify({"ok": False, "message": "No applications folder found"}), 404
+
+    resume_files = list(APPLICATIONS_DIR.rglob("tailored_resume.*"))
+    if not resume_files:
+        return jsonify({"ok": False, "message": "No tailored resumes found yet"}), 404
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for f in resume_files:
+            # Use folder/filename as the zip path for clarity
+            arcname = f"{f.parent.name}/{f.name}"
+            zf.write(f, arcname)
+    buf.seek(0)
+
+    filename = f"tailored_resumes_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+    return send_file(
+        buf,
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name=filename,
+    )
 
 
 if __name__ == "__main__":
