@@ -38,26 +38,18 @@ RESUME_FILENAME = os.getenv("RESUME_FILENAME", "Sandeep Appasani_Resume.docx")
 RESUME_PATH     = RESUME_DIR / RESUME_FILENAME
 
 # ── Job Search Queries ────────────────────────────────────────
-JOB_SEARCH_QUERIES = [
-    # Testing roles
-    "QA Engineer",
-    "Test Engineer",
-    "SDET Automation",
-    "Quality Assurance Engineer",
-    # Data Engineering roles
-    "Data Engineer",
-    "ETL Developer",
-    # Azure roles
-    "Azure Data Engineer",
-    "Azure Cloud Engineer",
-    # Claude / AI roles
-    "AI Engineer Claude",
-    "LLM Engineer",
-    "Prompt Engineer",
+_DEFAULT_QUERIES = [
+    "QA Engineer", "Test Engineer", "SDET Automation", "Quality Assurance Engineer",
+    "Data Engineer", "ETL Developer", "Azure Data Engineer", "Azure Cloud Engineer",
+    "AI Engineer", "LLM Engineer", "Prompt Engineer",
 ]
 
-JOB_LOCATION = os.getenv("JOB_LOCATION", "United States")
-JOB_REMOTE   = os.getenv("JOB_REMOTE", "true").lower() == "true"
+_raw_queries = os.getenv("SEARCH_QUERIES", "")
+JOB_SEARCH_QUERIES = [q.strip() for q in _raw_queries.split(",") if q.strip()] if _raw_queries else _DEFAULT_QUERIES
+
+JOB_LOCATION  = os.getenv("JOB_LOCATION", "United States")
+JOB_REMOTE    = os.getenv("JOB_REMOTE", "true").lower() == "true"
+JOB_DATE_FROM = os.getenv("JOB_DATE_FROM", "")  # e.g. "2024-03-01"
 
 # ── Claude Model ──────────────────────────────────────────────
 CLAUDE_MODEL  = "claude-opus-4-6"

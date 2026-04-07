@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 import requests
 from bs4 import BeautifulSoup
 
-from config import RAPIDAPI_KEY, JOB_SEARCH_QUERIES, JOB_LOCATION, JOB_REMOTE, MAX_JOBS_PER_RUN
+from config import RAPIDAPI_KEY, JOB_SEARCH_QUERIES, JOB_LOCATION, JOB_REMOTE, JOB_DATE_FROM, MAX_JOBS_PER_RUN
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -298,6 +298,26 @@ def fetch_jsearch_jobs(query: str) -> list[JobListing]:
     return jobs
 
 
+# ── Date filter helper ────────────────────────────────────────
+def _after_date_from(posted_at: str) -> bool:
+    """Return True if posted_at is on or after JOB_DATE_FROM (or no filter set)."""
+    if not JOB_DATE_FROM or not posted_at:
+        return True
+    try:
+        from datetime import datetime as dt
+        cutoff = dt.strptime(JOB_DATE_FROM, "%Y-%m-%d")
+        # Try common date formats
+        for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+            try:
+                posted = dt.strptime(posted_at[:19], fmt[:len(posted_at[:19])])
+                return posted >= cutoff
+            except ValueError:
+                continue
+    except Exception:
+        pass
+    return True
+
+
 # ── Main entry ────────────────────────────────────────────────
 def fetch_all_jobs() -> list[JobListing]:
     """Run all queries across all sources, deduplicate, cap at MAX_JOBS_PER_RUN."""
@@ -334,6 +354,8 @@ def fetch_all_jobs() -> list[JobListing]:
                 continue
             if uid:
                 seen_ids.add(uid)
+            if not _after_date_from(job.posted_at):
+                continue
 
             # Enrich short LinkedIn descriptions
             if job.source == "LinkedIn" and len(job.description) < 200 and job.apply_url:

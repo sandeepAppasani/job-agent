@@ -412,10 +412,28 @@
         </button>
       </div>
 
+      <!-- Search Settings Card -->
+      <div class="apply-card">
+        <h3>🔍 Search Settings</h3>
+
+        <label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:4px;">Country / Location</label>
+        <input id="cfgLocation" type="text" placeholder="e.g. United States, Germany, Remote"
+          style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.85rem;box-sizing:border-box;margin-bottom:10px;" />
+
+        <label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:4px;">Jobs Posted After</label>
+        <input id="cfgDateFrom" type="date"
+          style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.85rem;box-sizing:border-box;margin-bottom:10px;" />
+
+        <label style="font-size:.8rem;color:var(--muted);display:block;margin-bottom:6px;">Job Positions</label>
+        <div id="positionChecks" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
+          <!-- populated by JS -->
+        </div>
+      </div>
+
       <!-- Apply Button Card -->
       <div class="apply-card">
         <h3>🚀 Run Job Search Agent</h3>
-        <p>Fetches fresh listings, tailors your resume with Claude AI, and applies to LinkedIn jobs automatically.</p>
+        <p>Fetches fresh listings, tailors your resume with AI, and tracks all applications.</p>
         <button class="btn-apply" id="btnApply" onclick="runAgent()">
           <span id="btnApplyIcon">⚡</span>
           <span id="btnApplyText">Apply Jobs Now</span>
@@ -695,15 +713,57 @@ function renderChart(counts) {
   });
 }
 
+// ── Position checkboxes ───────────────────────────────────────
+const ALL_POSITIONS = [
+  "QA Engineer","Test Engineer","SDET Automation","Quality Assurance Engineer",
+  "Data Engineer","ETL Developer","Azure Data Engineer","Azure Cloud Engineer",
+  "AI Engineer","LLM Engineer","Prompt Engineer"
+];
+
+function initPositions() {
+  const saved = JSON.parse(localStorage.getItem('selectedPositions') || 'null') || ALL_POSITIONS;
+  document.getElementById('cfgLocation').value = localStorage.getItem('cfgLocation') || 'United States';
+  document.getElementById('cfgDateFrom').value  = localStorage.getItem('cfgDateFrom') || '';
+  const c = document.getElementById('positionChecks');
+  c.innerHTML = ALL_POSITIONS.map(p => `
+    <label style="display:flex;align-items:center;gap:4px;font-size:.78rem;background:var(--surface2);padding:4px 8px;border-radius:20px;border:1px solid var(--border);cursor:pointer;">
+      <input type="checkbox" value="${p}" ${saved.includes(p)?'checked':''} onchange="saveSettings()" /> ${p}
+    </label>`).join('');
+}
+
+function saveSettings() {
+  const checked = [...document.querySelectorAll('#positionChecks input:checked')].map(x=>x.value);
+  localStorage.setItem('selectedPositions', JSON.stringify(checked));
+  localStorage.setItem('cfgLocation', document.getElementById('cfgLocation').value);
+  localStorage.setItem('cfgDateFrom', document.getElementById('cfgDateFrom').value);
+}
+
+function getSearchConfig() {
+  const positions = [...document.querySelectorAll('#positionChecks input:checked')].map(x=>x.value);
+  return {
+    queries:   positions.length ? positions : ALL_POSITIONS,
+    location:  document.getElementById('cfgLocation').value.trim() || 'United States',
+    date_from: document.getElementById('cfgDateFrom').value || '',
+  };
+}
+
 // ── Run Agent ────────────────────────────────────────────────
 async function runAgent() {
   if (isRunning) return;
+  saveSettings();
+  const cfg = getSearchConfig();
+  if (!cfg.queries.length) { showToast('Select at least one position', 'error'); return; }
+
   const log = document.getElementById('logBox');
   log.innerHTML = '';
   appendLog('▶ Sending start command…', 'info');
 
   try {
-    const r = await fetch('/api/run-agent', { method: 'POST' });
+    const r = await fetch('/api/run-agent', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(cfg),
+    });
     const d = await r.json();
     if (!d.ok) { showToast(d.message, 'error'); return; }
   } catch (e) {
@@ -893,6 +953,9 @@ document.getElementById('statusFilter').addEventListener('change', () => renderT
 // ── Auto-refresh every 60s ───────────────────────────────────
 checkResumeStatus();
 loadData();
+initPositions();
+document.getElementById('cfgLocation').addEventListener('change', saveSettings);
+document.getElementById('cfgDateFrom').addEventListener('change', saveSettings);
 setInterval(loadData, 60000);
 </script>
 </body>

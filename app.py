@@ -46,11 +46,12 @@ def _enqueue(msg: str):
         pass
 
 
-def _run_pipeline_thread():
+def _run_pipeline_thread(extra_env: dict = {}):
     global _agent_running
     _agent_running = True
     _enqueue("▶ Agent started…")
     try:
+        env = {**os.environ, **extra_env}
         proc = subprocess.Popen(
             [sys.executable, "main.py", "--run-once"],
             cwd=str(Path(__file__).parent),
@@ -60,6 +61,7 @@ def _run_pipeline_thread():
             encoding="utf-8",
             errors="replace",
             bufsize=1,
+            env=env,
         )
         for line in proc.stdout:
             line = line.rstrip()
@@ -175,13 +177,23 @@ def api_run_agent():
     if not resume_found:
         return jsonify({"ok": False, "message": "Please upload your resume first"}), 400
 
+    # Read optional search config from request body
+    body = request.get_json(silent=True) or {}
+    search_env = {}
+    if body.get("queries"):
+        search_env["SEARCH_QUERIES"] = ",".join(body["queries"])
+    if body.get("location"):
+        search_env["JOB_LOCATION"] = body["location"]
+    if body.get("date_from"):
+        search_env["JOB_DATE_FROM"] = body["date_from"]
+
     while not _log_queue.empty():
         try:
             _log_queue.get_nowait()
         except queue.Empty:
             break
 
-    thread = threading.Thread(target=_run_pipeline_thread, daemon=True)
+    thread = threading.Thread(target=_run_pipeline_thread, args=(search_env,), daemon=True)
     thread.start()
     return jsonify({"ok": True, "message": "Agent started"})
 
