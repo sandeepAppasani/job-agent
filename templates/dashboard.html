@@ -257,11 +257,13 @@
 
     /* ── Edit Status Inline ──────────────────────────────── */
     .status-select {
-      background: transparent; border: none; color: inherit;
-      font-size: .72rem; font-weight: 700; cursor: pointer;
-      text-transform: uppercase; letter-spacing: .05em;
+      background: var(--surface2); border: 1px solid var(--accent);
+      color: var(--text); font-size: .72rem; font-weight: 700;
+      cursor: pointer; text-transform: uppercase; letter-spacing: .05em;
+      border-radius: 6px; padding: 3px 6px;
     }
-    .status-select:focus { outline: 2px solid var(--accent); border-radius: 4px; }
+    .status-select option { background: var(--surface2); color: var(--text); }
+    .status-select:focus { outline: 2px solid var(--accent); }
 
     /* ── Empty State ─────────────────────────────────────── */
     .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
